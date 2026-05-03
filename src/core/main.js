@@ -1,6 +1,7 @@
 import { createRequire } from 'module';
-import path, { join } from 'path';
+import path, { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+const _dir = dirname(fileURLToPath(import.meta.url));
 import { platform } from 'process';
 
 global.__filename = function filename(pathURL = import.meta.url, rmPrefix = platform !== 'win32') {
