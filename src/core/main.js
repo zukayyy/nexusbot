@@ -19,7 +19,7 @@ import { spawn } from 'child_process';
 import { tmpdir } from 'os';
 import { format } from 'util';
 import { parentPort } from 'worker_threads';
-const { makeWASocket, protoType, serialize } = await import(pathToFileURL(join(_dir, '../node_modules/nexusmd/src/lib/simple.js')).href);
+import { makeWASocket, protoType, serialize } from '../lib/simple.js';
 import chalk from 'chalk';
 import pino from 'pino';
 import syntaxerror from 'syntax-error';
