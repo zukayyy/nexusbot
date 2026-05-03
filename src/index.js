@@ -3,10 +3,10 @@ import { join, dirname, resolve, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 import { watchFile, unwatchFile, existsSync, copyFileSync, readFileSync, writeFileSync } from 'fs';
 import readline from 'readline';
+import chalk from 'chalk';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// ── Auto fix package.json user (tambah "type": "module" kalau belum ada) ──
 function ensureModuleType() {
 	const pkgPath = resolve(process.cwd(), 'package.json');
 	if (!existsSync(pkgPath)) {
@@ -24,20 +24,60 @@ function ensureModuleType() {
 	} catch {}
 }
 
-/**
- * Start the WhatsApp bot
- * @param {string} configPath - Path to your config.js file (e.g. "./config.js")
- */
-export default function startBot(configPath = './config.js') {
-	// Fix package.json dulu
+function question(rl, prompt) {
+	return new Promise((resolve) => rl.question(prompt, resolve));
+}
+
+// ── Tanya metode koneksi di parent process (bukan worker) ──────────────────
+async function selectConnectionMethod() {
+	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+	let choice = '';
+	while (choice !== '1' && choice !== '2') {
+		console.log(chalk.hex('#FFD700').bold('\n  ╔══════════════════════════════╗'));
+		console.log(chalk.hex('#FFD700').bold('  ║   PILIH METODE KONEKSI      ║'));
+		console.log(chalk.hex('#FFD700').bold('  ╚══════════════════════════════╝\n'));
+		console.log(chalk.hex('#00FF88')('  [ 1 ]') + chalk.white(' Pairing Code') + chalk.gray(' (Rekomendasi)'));
+		console.log(chalk.hex('#00D4FF')('  [ 2 ]') + chalk.white(' QR Code'));
+		console.log('');
+		choice = (await question(rl, chalk.hex('#A78BFA').bold('  ➤ Masukkan pilihan (1/2): '))).trim();
+		if (choice !== '1' && choice !== '2') {
+			console.log(chalk.red('  ✗ Pilihan tidak valid! Masukkan 1 atau 2.'));
+		}
+	}
+
+	let phone = '';
+	if (choice === '1') {
+		while (true) {
+			phone = (await question(rl, chalk.hex('#FF6B9D').bold('  ➤ Masukkan nomor WhatsApp (contoh: 6281234567890): ')))
+				.trim().replace(/\D/g, '');
+			if (!phone) {
+				console.log(chalk.red('  ✗ Nomor tidak boleh kosong!'));
+				continue;
+			}
+			if (phone.length < 10 || phone.length > 15) {
+				console.log(chalk.red('  ✗ Nomor tidak valid! Panjang harus 10–15 digit.'));
+				continue;
+			}
+			if (phone.startsWith('0')) {
+				phone = '62' + phone.slice(1);
+				console.log(chalk.hex('#FFD700')(`  ↺ Dikonversi: ${phone}`));
+			}
+			break;
+		}
+	}
+
+	rl.close();
+	return { usePairing: choice === '1', phone };
+}
+
+export default async function startBot(configPath = './config.js') {
 	ensureModuleType();
 
-	// Resolve config path relative to caller's cwd
 	const resolvedConfig = isAbsolute(configPath)
 		? configPath
 		: resolve(process.cwd(), configPath);
 
-	// Auto copy config.example.js kalau config belum ada
 	if (!existsSync(resolvedConfig)) {
 		const exampleConfig = join(__dirname, '..', 'config.example.js');
 		copyFileSync(exampleConfig, resolvedConfig);
@@ -46,40 +86,45 @@ export default function startBot(configPath = './config.js') {
 		process.exit(0);
 	}
 
-	// Pass config path ke worker via env
+	// Cek apakah sesi sudah ada
+	const sessionsDir = join(process.cwd(), 'sessions', 'session');
+	const credsPath = join(sessionsDir, 'creds.json');
+	const isNewSession = !existsSync(credsPath);
+
+	// Tanya metode koneksi di sini (parent process) sebelum worker jalan
+	let usePairing = false;
+	let pairingPhone = '';
+	if (isNewSession) {
+		const result = await selectConnectionMethod();
+		usePairing = result.usePairing;
+		pairingPhone = result.phone;
+	}
+
 	process.env.NEXUSMD_CONFIG = resolvedConfig;
 	process.env.NEXUSMD_CWD = process.cwd();
-
-	const rl = readline.createInterface(process.stdin, process.stdout);
+	process.env.NEXUSMD_USE_PAIRING = usePairing ? '1' : '0';
+	process.env.NEXUSMD_PHONE = pairingPhone;
 
 	let worker = null;
 	let running = false;
 	let restartTimer = null;
+
+	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
 	function start() {
 		if (running) return;
 		running = true;
 
 		const workerPath = join(__dirname, 'core', 'worker.js');
-
 		if (worker) worker.terminate();
 		worker = new Worker(workerPath, {
-			env: {
-				...process.env,
-				NEXUSMD_CONFIG: resolvedConfig,
-				NEXUSMD_CWD: process.cwd(),
-			},
+			env: { ...process.env },
 		});
 
-		if (restartTimer) {
-			clearTimeout(restartTimer);
-			restartTimer = null;
-		}
+		if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
 
 		worker.on('message', (msg) => {
-			if (msg === 'restart' || msg === 'reset') {
-				restart();
-			}
+			if (msg === 'restart' || msg === 'reset') restart();
 		});
 
 		worker.on('exit', (code) => {
@@ -117,13 +162,11 @@ export default function startBot(configPath = './config.js') {
 	}
 
 	function restart() {
-		if (worker) {
-			try { worker.terminate(); } catch {}
-		}
+		if (worker) { try { worker.terminate(); } catch {} }
 		running = false;
 		start();
 	}
 
-	console.log('[nexusmd] 🐾 Starting bot with config:', resolvedConfig);
+	console.log('[nexusmd] 🐾 Starting bot...');
 	start();
 }
