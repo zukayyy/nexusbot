@@ -1,0 +1,35 @@
+{
+  "name": "nexusmd",
+  "version": "1.0.0",
+  "description": "WhatsApp Multi-Device bot module powered by Baileys.",
+  "main": "src/index.js",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "author": "AgusXzz",
+  "license": "ISC",
+  "keywords": [
+    "whatsapp-bot",
+    "baileys",
+    "multi-device",
+    "wabot"
+  ],
+  "dependencies": {
+    "awesome-phonenumber": "^2.68.0",
+    "axios": "^1.6.0",
+    "baileys": "latest",
+    "chalk": "^5.0.0",
+    "cheerio": "^1.1.2",
+    "file-type": "^17.1.1",
+    "fluent-ffmpeg": "^2.1.3",
+    "lowdb": "^3.0.0",
+    "moment-timezone": "^0.5.33",
+    "node-webpmux": "^3.2.1",
+    "pino": "^8.0.0",
+    "syntax-error": "^1.4.0"
+  }
+}
