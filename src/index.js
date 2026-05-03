@@ -1,28 +1,52 @@
 import { Worker } from 'worker_threads';
 import { join, dirname, resolve, isAbsolute } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import { watchFile, unwatchFile, existsSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { watchFile, unwatchFile, existsSync, copyFileSync, readFileSync, writeFileSync } from 'fs';
 import readline from 'readline';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ── Auto fix package.json user (tambah "type": "module" kalau belum ada) ──
+function ensureModuleType() {
+	const pkgPath = resolve(process.cwd(), 'package.json');
+	if (!existsSync(pkgPath)) {
+		writeFileSync(pkgPath, JSON.stringify({ type: 'module' }, null, 2));
+		console.log('[nexusmd] 📦 package.json dibuat otomatis');
+		return;
+	}
+	try {
+		const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+		if (pkg.type !== 'module') {
+			pkg.type = 'module';
+			writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+			console.log('[nexusmd] 📦 package.json: "type": "module" ditambahkan otomatis');
+		}
+	} catch {}
+}
 
 /**
  * Start the WhatsApp bot
  * @param {string} configPath - Path to your config.js file (e.g. "./config.js")
  */
 export default function startBot(configPath = './config.js') {
+	// Fix package.json dulu
+	ensureModuleType();
+
 	// Resolve config path relative to caller's cwd
 	const resolvedConfig = isAbsolute(configPath)
 		? configPath
 		: resolve(process.cwd(), configPath);
 
+	// Auto copy config.example.js kalau config belum ada
 	if (!existsSync(resolvedConfig)) {
-		console.error(`[nexusmd] ❌ Config file not found: ${resolvedConfig}`);
-		console.error(`[nexusmd] 💡 Copy the example config: cp node_modules/nexusmd/config.example.js config.js`);
-		process.exit(1);
+		const exampleConfig = join(__dirname, '..', 'config.example.js');
+		copyFileSync(exampleConfig, resolvedConfig);
+		console.log(`[nexusmd] 📋 config.js otomatis dicopy dari config.example.js`);
+		console.log(`[nexusmd] ✏️  Edit config.js terlebih dahulu, lalu jalankan ulang!`);
+		process.exit(0);
 	}
 
-	// Pass config path to worker via env
+	// Pass config path ke worker via env
 	process.env.NEXUSMD_CONFIG = resolvedConfig;
 	process.env.NEXUSMD_CWD = process.cwd();
 
