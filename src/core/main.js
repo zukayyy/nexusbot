@@ -18,7 +18,7 @@ import { spawn } from 'child_process';
 import { tmpdir } from 'os';
 import { format } from 'util';
 import { parentPort } from 'worker_threads';
-import { makeWASocket, protoType, serialize } from '../lib/simple.js';
+const { makeWASocket, protoType, serialize } = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), '../lib/simple.js')).href);
 import chalk from 'chalk';
 import pino from 'pino';
 import syntaxerror from 'syntax-error';
